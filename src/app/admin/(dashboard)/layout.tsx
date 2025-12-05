@@ -1,0 +1,8 @@
+import type { ReactNode } from "react";
+import { AdminShell } from "@/components/admin/AdminShell";
+
+export const dynamic = "force-dynamic";
+
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  return <AdminShell>{children}</AdminShell>;
+}
