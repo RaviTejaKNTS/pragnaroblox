@@ -503,7 +503,7 @@ function isListContinuationFriendly(node: Node): boolean {
     const hasImage = el.querySelector("img");
     if (!hasImage) return false;
     const text = el.textContent ?? "";
-    return text.trim().length === 0 || hasImage;
+    return text.trim().length === 0 || Boolean(hasImage);
   }
   return false;
 }
