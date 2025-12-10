@@ -94,11 +94,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex w-full items-center justify-between gap-3 px-4 py-2.5 md:px-5">
           <div className="flex items-center gap-3">
             <Link href="/admin" className="text-base font-semibold text-foreground">
-              SupaCMS
+              Admin Panel
             </Link>
-            <span className="hidden rounded-full bg-surface-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted sm:inline">
-              {pageTitle}
-            </span>
           </div>
           <div className="flex flex-1 items-center justify-center gap-2 overflow-hidden">
             <div className="no-scrollbar flex max-w-4xl flex-1 items-center gap-1.5 overflow-x-auto rounded-full border border-border/50 bg-surface/80 px-2 py-1 text-sm shadow-soft">
@@ -120,11 +117,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-1.5 rounded-full border border-border/60 bg-surface px-3 py-1.5 text-[11px] text-muted lg:flex">
-              <span className="text-base">⌘</span>
-              <span className="text-[9px] uppercase tracking-wide">K</span>
-              <span className="text-[11px] text-muted">Search</span>
-            </div>
             <div className="flex items-center gap-2 rounded-full border border-border/60 bg-surface px-3 py-1.5 text-[11px] text-muted">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               <span className="font-semibold text-foreground">

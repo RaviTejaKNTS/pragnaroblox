@@ -393,7 +393,7 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
   }, [contentValue]);
 
   const lastUpdatedLabel = article ? `Last updated ${new Date(article.updated_at).toLocaleString()}` : "New article";
-  const liveUrl = article?.slug ? `/articles/${article.slug}` : null;
+  const liveUrl = article?.slug ? `https://bloxodes.com/articles/${article.slug}` : null;
 
   function handleBackClick() {
     if (!confirmLeave()) return;

@@ -210,7 +210,7 @@ export function GameEditorForm({
     resolver: zodResolver(formSchema),
     defaultValues
   });
-  const viewUrl = game?.slug ? `/${game.slug}` : null;
+  const viewUrl = game?.slug ? `https://bloxodes.com/codes/${game.slug}` : null;
   const lastUpdatedLabel = game ? `Last updated ${new Date(game.updated_at).toLocaleString()}` : "New game";
 
   const confirmLeave = useUnsavedChangesWarning(isDirty, "You have unsaved changes. Leave without saving?");

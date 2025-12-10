@@ -83,6 +83,21 @@ const PLACEHOLDER_PATTERN = /\[\[([a-z0-9_]+)\|([^\]]+)\]\]/gi;
 
 const LINK_TOOLTIP_OFFSET = 8;
 
+const EDITABLE_BLOCK_TAGS = new Set([
+  "p",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "blockquote",
+  "pre",
+  "table",
+]);
+
 type SavedSelection = {
   start: number;
   end: number;
@@ -267,6 +282,14 @@ function serializeInline(node: Node): string {
       const delimiter = hasBacktick ? "``" : "`";
       return `${delimiter}${content}${delimiter}`;
     }
+    case "img": {
+      const src = element.getAttribute("src") ?? "";
+      if (!src) return "";
+      const alt = element.getAttribute("alt") ?? "";
+      const title = element.getAttribute("title");
+      const titlePart = title ? ` "${title}"` : "";
+      return `![${escapeMarkdownText(alt)}](${src}${titlePart})`;
+    }
     case "a": {
       const href = element.getAttribute("href") ?? "";
       const label = Array.from(element.childNodes).map(serializeInline).join("") || href;
@@ -280,6 +303,7 @@ function serializeInline(node: Node): string {
 }
 
 function serializeList(list: HTMLElement, ordered: boolean): string {
+  const start = ordered ? Math.max(parseInt(list.getAttribute("start") ?? "1", 10) || 1, 1) : 1;
   const items = Array.from(list.children).filter((child) => child.tagName.toLowerCase() === "li");
   const lines: string[] = [];
   items.forEach((item, index) => {
@@ -298,7 +322,7 @@ function serializeList(list: HTMLElement, ordered: boolean): string {
       }
       inlineParts.push(serializeInline(child));
     });
-    const prefix = ordered ? `${index + 1}. ` : "- ";
+    const prefix = ordered ? `${start + index}. ` : "- ";
     const content = inlineParts.join("").trim();
     const baseLine = `${prefix}${content || ""}`.trimEnd();
     const nested = blockParts
@@ -406,6 +430,8 @@ function serializeBlock(node: Node): string {
       return serializeTable(element as HTMLTableElement);
     case "hr":
       return "---";
+    case "img":
+      return serializeInline(element);
     default:
       return Array.from(element.childNodes).map(serializeInline).join("").trim();
   }
@@ -426,9 +452,92 @@ function ensureParagraph(container: HTMLElement) {
   }
 }
 
+function findBlockElement(node: Node | null, root: HTMLElement): HTMLElement | null {
+  let current: Node | null = node;
+  while (current && current !== root) {
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      const el = current as HTMLElement;
+      if (EDITABLE_BLOCK_TAGS.has(el.tagName.toLowerCase())) {
+        return el;
+      }
+    }
+    current = current.parentNode;
+  }
+  return null;
+}
+
+function findNextEditableBlock(start: HTMLElement | null): HTMLElement | null {
+  let next: Element | null = start?.nextElementSibling ?? null;
+  while (next) {
+    if (EDITABLE_BLOCK_TAGS.has(next.tagName.toLowerCase())) {
+      return next as HTMLElement;
+    }
+    next = next.nextElementSibling;
+  }
+  return null;
+}
+
+function insertEmptyBlockAfter(block: HTMLElement | null, container: HTMLElement): HTMLElement {
+  const parent = block?.parentElement ?? container;
+  const tag = block?.tagName.toLowerCase() === "li" ? "li" : "p";
+  const targetParent =
+    tag === "li" && parent.tagName && ["ul", "ol"].includes(parent.tagName.toLowerCase()) ? parent : container;
+  const newBlock = document.createElement(tag);
+  newBlock.innerHTML = "<br />";
+  const reference = block?.nextSibling ?? null;
+  targetParent.insertBefore(newBlock, reference);
+  return newBlock;
+}
+
+function isListContinuationFriendly(node: Node): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.nodeValue ?? "").trim().length === 0;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  const el = node as HTMLElement;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "br") return true;
+  if (["p", "div", "figure"].includes(tag)) {
+    const hasNestedLists = el.querySelector("ol,ul");
+    if (hasNestedLists) return false;
+    const hasImage = el.querySelector("img");
+    if (!hasImage) return false;
+    const text = el.textContent ?? "";
+    return text.trim().length === 0 || hasImage;
+  }
+  return false;
+}
+
+function normalizeOrderedLists(container: HTMLElement) {
+  let lastEnd: number | null = null;
+  let bufferFriendly = true;
+
+  const children = Array.from(container.childNodes);
+  for (const node of children) {
+    if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName.toLowerCase() === "ol") {
+      const list = node as HTMLOListElement;
+      const items = Array.from(list.children).filter((child) => child.tagName.toLowerCase() === "li");
+      const count = items.length;
+      let startValue = 1;
+      if (lastEnd !== null && bufferFriendly) {
+        startValue = lastEnd + 1;
+        list.setAttribute("start", String(startValue));
+      } else {
+        list.removeAttribute("start");
+      }
+      lastEnd = startValue + count - 1;
+      bufferFriendly = true;
+      continue;
+    }
+    if (lastEnd !== null) {
+      bufferFriendly = bufferFriendly && isListContinuationFriendly(node);
+    }
+  }
+}
+
 export function RichMarkdownEditor({ label, value, onChange, placeholder, height }: RichMarkdownEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState<"rich" | "markdown">("rich");
+  const [mode, setMode] = useState<"rich" | "markdown">("markdown");
   const [formatState, setFormatState] = useState<EditorFormatState>(DEFAULT_FORMAT_STATE);
   const [activePlaceholder, setActivePlaceholder] = useState<HTMLElement | null>(null);
   const [activeTableCell, setActiveTableCell] = useState<HTMLTableCellElement | null>(null);
@@ -438,6 +547,26 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
   const lastSelectionRef = useRef<Range | null>(null);
   const hoveredLinkRef = useRef<HTMLAnchorElement | null>(null);
   const hideLinkPreviewTimeoutRef = useRef<number | null>(null);
+
+  const moveCaretToElementStart = useCallback((element: HTMLElement) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    lastSelectionRef.current = range.cloneRange();
+  }, []);
+
+  const moveCaretToEnd = useCallback((container: HTMLElement) => {
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    lastSelectionRef.current = range.cloneRange();
+  }, []);
 
   const restoreLastSelection = useCallback(() => {
     if (!editorRef.current) return;
@@ -475,6 +604,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
     if (!editorRef.current) return;
     const container = editorRef.current;
     ensureParagraph(container);
+    normalizeOrderedLists(container);
     wrapPlaceholders(container);
     updateEmptyState(container);
     const markdown = Array.from(container.childNodes)
@@ -498,6 +628,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
       if (!editorRef.current) return;
       editorRef.current.innerHTML = html || "";
       ensureParagraph(editorRef.current);
+      normalizeOrderedLists(editorRef.current);
       wrapPlaceholders(editorRef.current);
       updateEmptyState(editorRef.current);
       lastMarkdownRef.current = value ?? "";
@@ -595,6 +726,8 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
       if (mode !== "rich") return;
       if (event.key !== "Enter") return;
       event.preventDefault();
+      const selection = window.getSelection();
+      const currentBlock = selection?.rangeCount ? findBlockElement(selection.anchorNode, container) : null;
       restoreLastSelection();
       if (event.shiftKey) {
         document.execCommand("insertLineBreak");
@@ -604,6 +737,20 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
       requestAnimationFrame(() => {
         if (!editorRef.current) return;
         ensureParagraph(editorRef.current);
+        if (!event.shiftKey) {
+          const postSelection = window.getSelection();
+          const postBlock = postSelection?.rangeCount
+            ? findBlockElement(postSelection.focusNode, editorRef.current)
+            : null;
+          let targetBlock = postBlock;
+          if (!targetBlock || targetBlock === currentBlock) {
+            targetBlock = findNextEditableBlock(currentBlock) ?? null;
+          }
+          if (!targetBlock) {
+            targetBlock = insertEmptyBlockAfter(currentBlock, editorRef.current);
+          }
+          moveCaretToElementStart(targetBlock);
+        }
         updateMarkdown();
         refreshToolbarState();
       });
@@ -612,7 +759,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
     return () => {
       container.removeEventListener("keydown", handleKeyDown);
     };
-  }, [mode, refreshToolbarState, restoreLastSelection, updateMarkdown]);
+  }, [mode, moveCaretToElementStart, moveCaretToEnd, refreshToolbarState, restoreLastSelection, updateMarkdown]);
 
   const exec = useCallback(
     (command: string, value?: string) => {
@@ -1218,7 +1365,6 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           data-placeholder={placeholder ?? "Write your content…"}
           style={{
             minHeight: heightValue,
-            lineHeight: 1.8,
             display: mode === "markdown" ? "none" : undefined
           } as CSSProperties}
         />
@@ -1265,6 +1411,9 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           font-size: 0.98rem;
           color: rgb(var(--color-foreground));
           overflow-y: auto;
+          line-height: 1.75;
+          letter-spacing: 0.01em;
+          word-break: break-word;
         }
         .rich-editor-area[data-empty="true"]:before {
           content: attr(data-placeholder);
@@ -1276,7 +1425,8 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
         }
         .rich-editor-area p,
         .rich-editor-area div {
-          margin: 0 0 0.8rem 0;
+          margin: 0 0 1rem 0;
+          color: rgb(var(--color-foreground));
         }
         .rich-editor-area h1,
         .rich-editor-area h2,
@@ -1284,19 +1434,58 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
         .rich-editor-area h4,
         .rich-editor-area h5,
         .rich-editor-area h6 {
+          font-weight: 800;
+          color: rgb(var(--color-foreground));
+        }
+        .rich-editor-area h1 {
+          margin: 1.6rem 0 0.75rem;
+          font-size: 2.1rem;
+          line-height: 1.2;
+          letter-spacing: -0.02em;
+        }
+        .rich-editor-area h2 {
+          margin: 1.4rem 0 0.65rem;
+          font-size: 1.6rem;
+          line-height: 1.28;
+          letter-spacing: -0.01em;
+        }
+        .rich-editor-area h3 {
           margin: 1.2rem 0 0.6rem;
-          font-weight: 700;
+          font-size: 1.35rem;
+          line-height: 1.3;
+        }
+        .rich-editor-area h4 {
+          margin: 1rem 0 0.55rem;
+          font-size: 1.15rem;
+          line-height: 1.35;
+        }
+        .rich-editor-area h5,
+        .rich-editor-area h6 {
+          margin: 0.8rem 0 0.45rem;
+          font-size: 1.05rem;
+          line-height: 1.4;
+          letter-spacing: 0.01em;
         }
         .rich-editor-area ul,
         .rich-editor-area ol {
-          padding-left: 1.5rem;
-          margin: 0.6rem 0;
+          padding-left: 1.35rem;
+          margin: 0.75rem 0 0.9rem;
+        }
+        .rich-editor-area li + li {
+          margin-top: 0.35rem;
+        }
+        .rich-editor-area ul ul,
+        .rich-editor-area ol ol {
+          margin-top: 0.35rem;
         }
         .rich-editor-area blockquote {
-          border-left: 4px solid rgb(var(--color-border));
-          padding-left: 1rem;
-          color: rgb(var(--color-muted));
-          margin: 1rem 0;
+          border-left: 4px solid rgba(var(--color-border), 0.9);
+          padding: 0.9rem 1.25rem;
+          color: rgb(var(--color-foreground));
+          margin: 1.1rem 0;
+          background: rgba(var(--color-surface-muted), 0.38);
+          border-radius: 0.9rem;
+          font-style: italic;
         }
         .rich-editor-area pre {
           background: rgba(148, 163, 184, 0.16);
@@ -1304,24 +1493,63 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           padding: 1rem;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
           overflow-x: auto;
+          border: 1px solid rgba(var(--color-border), 0.6);
+          line-height: 1.5;
+        }
+        .rich-editor-area code {
+          background: rgba(var(--color-surface-muted), 0.55);
+          border: 1px solid rgba(var(--color-border), 0.6);
+          border-radius: 0.55rem;
+          padding: 0.18rem 0.5rem;
+          font-size: 0.92rem;
+        }
+        .rich-editor-area pre code {
+          background: transparent;
+          border: none;
+          padding: 0;
+          font-size: 0.95rem;
+        }
+        .rich-editor-area hr {
+          border: 0;
+          height: 1px;
+          margin: 1.5rem 0;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(var(--color-border), 0.8),
+            transparent
+          );
         }
         .rich-editor-area table {
           width: 100%;
           border-collapse: collapse;
           margin: 1.25rem 0;
+          border: 1px solid rgba(var(--color-border), 0.6);
+          border-radius: 0.75rem;
+          overflow: hidden;
         }
         .rich-editor-area th,
         .rich-editor-area td {
           border: 1px solid rgb(var(--color-border));
           padding: 0.75rem;
           text-align: left;
+          font-size: 0.95rem;
         }
         .rich-editor-area th {
           background: rgba(148, 163, 184, 0.12);
+          font-weight: 700;
+          color: rgb(var(--color-foreground));
         }
         .rich-editor-area a {
           color: rgb(var(--color-accent));
           text-decoration: underline;
+          text-underline-offset: 0.18em;
+          text-decoration-thickness: 0.12em;
+          font-weight: 600;
+        }
+        .rich-editor-area a:hover {
+          color: rgba(var(--color-accent), 0.95);
+          text-decoration-color: rgba(var(--color-accent), 0.95);
         }
         .rich-editor-area .${PLACEHOLDER_CLASS} {
           display: inline-flex;
@@ -1346,6 +1574,13 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           padding: 0.05rem 0.35rem;
           border-radius: 999px;
           margin-left: 0.35rem;
+        }
+        .rich-editor-area img {
+          max-width: 100%;
+          display: block;
+          border-radius: 0.9rem;
+          border: 1px solid rgba(var(--color-border), 0.6);
+          margin: 1rem 0;
         }
       `}</style>
     </>

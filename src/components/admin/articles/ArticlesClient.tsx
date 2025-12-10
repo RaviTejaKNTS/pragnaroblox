@@ -223,7 +223,7 @@ export function ArticlesClient({ initialArticles, authors }: ArticlesClientProps
                   <td className="px-4 py-3 text-muted">
                     {article.slug ? (
                       <Link
-                        href={`/articles/${article.slug}`}
+                        href={`https://bloxodes.com/articles/${article.slug}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-accent underline-offset-2 hover:underline"

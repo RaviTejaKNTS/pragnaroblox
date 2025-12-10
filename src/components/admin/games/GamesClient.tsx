@@ -330,7 +330,7 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
                   <td className="px-4 py-3 text-muted">
                     {game.slug ? (
                       <Link
-                        href={`/${game.slug}`}
+                        href={`https://bloxodes.com/codes/${game.slug}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-accent underline-offset-2 hover:underline"
