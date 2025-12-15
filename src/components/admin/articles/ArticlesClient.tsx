@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import type { AdminArticleSummary } from "@/lib/admin/articles";
 import type { AdminAuthorOption } from "@/lib/admin/games";
@@ -32,6 +32,9 @@ const defaultVisibility: ColumnVisibility = {
 interface ArticlesClientProps {
   initialArticles: AdminArticleSummary[];
   authors: AdminAuthorOption[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 function sortArticles(
@@ -49,14 +52,19 @@ function sortArticles(
   });
 }
 
-export function ArticlesClient({ initialArticles, authors }: ArticlesClientProps) {
+export function ArticlesClient({ initialArticles, authors, total, page, pageSize }: ArticlesClientProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("published");
   const [authorFilter, setAuthorFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<"updated_at" | "created_at">("updated_at");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [visibility, setVisibility] = useState<ColumnVisibility>(defaultVisibility);
+  const pageCount = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
+  const canGoPrev = page > 1;
+  const canGoNext = page < pageCount;
 
   const filtered = useMemo(() => {
     const filteredArticles = initialArticles.filter((article) => {
@@ -72,21 +80,14 @@ export function ArticlesClient({ initialArticles, authors }: ArticlesClientProps
     return sortArticles(filteredArticles, sortKey, sortOrder);
   }, [initialArticles, search, statusFilter, authorFilter, sortKey, sortOrder]);
 
-  const totalCount = initialArticles.length;
+  const pageItemCount = initialArticles.length;
+  const totalCount = total;
   const filteredCount = filtered.length;
   const publishedCount = useMemo(
     () => initialArticles.filter((article) => article.is_published).length,
     [initialArticles]
   );
-  const draftCount = totalCount - publishedCount;
-  const totalWordCount = useMemo(
-    () =>
-      initialArticles.reduce((sum, article) => {
-        return sum + (article.word_count ?? 0);
-      }, 0),
-    [initialArticles]
-  );
-  const averageWordCount = totalCount > 0 ? Math.round(totalWordCount / totalCount) : 0;
+  const draftCount = Math.max(pageItemCount - publishedCount, 0);
 
   function openNewArticle() {
     router.push("/admin/articles/write/new");
@@ -96,9 +97,21 @@ export function ArticlesClient({ initialArticles, authors }: ArticlesClientProps
     router.push(`/admin/articles/write/${article.id}`);
   }
 
+  function changePage(nextPage: number) {
+    if (!pathname) return;
+    const params = new URLSearchParams(searchParams?.toString());
+    if (nextPage <= 1) {
+      params.delete("page");
+    } else {
+      params.set("page", String(nextPage));
+    }
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  }
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-soft">
           <p className="text-xs uppercase tracking-wide text-muted">Published</p>
           <p className="mt-2 text-2xl font-semibold text-foreground">{publishedCount}</p>
@@ -109,16 +122,11 @@ export function ArticlesClient({ initialArticles, authors }: ArticlesClientProps
           <p className="mt-2 text-2xl font-semibold text-foreground">{draftCount}</p>
           <p className="mt-1 text-xs text-muted">Waiting to publish</p>
         </div>
-        <div className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-soft">
-          <p className="text-xs uppercase tracking-wide text-muted">Avg. word count</p>
-          <p className="mt-2 text-2xl font-semibold text-foreground">{averageWordCount}</p>
-          <p className="mt-1 text-xs text-muted">Across {totalCount} articles</p>
-        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-surface/80 p-4 shadow-soft">
         <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-surface px-4 py-2 text-xs font-semibold text-muted">
-          Showing {filteredCount} of {totalCount} articles
+          Showing {filteredCount} of {pageItemCount} on this page · page {page} of {pageCount} · {totalCount} total
         </span>
         <input
           type="search"
@@ -279,6 +287,30 @@ export function ArticlesClient({ initialArticles, authors }: ArticlesClientProps
             ) : null}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
+        <span>
+          Page {page} of {pageCount} · {totalCount} total articles
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => changePage(page - 1)}
+            disabled={!canGoPrev}
+            className="rounded-lg border border-border/60 px-3 py-1 text-xs font-semibold text-foreground transition hover:border-border/40 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => changePage(page + 1)}
+            disabled={!canGoNext}
+            className="rounded-lg border border-border/60 px-3 py-1 text-xs font-semibold text-foreground transition hover:border-border/40 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

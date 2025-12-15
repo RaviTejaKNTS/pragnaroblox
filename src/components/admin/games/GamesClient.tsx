@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { downloadCSV } from "@/lib/csv";
 import type { AdminAuthorOption, AdminGameSummary } from "@/lib/admin/games";
-import { refreshGameCodes } from "@/app/admin/(dashboard)/games/actions";
 
 const columns = [
   { key: "name", label: "Name" },
@@ -14,9 +12,7 @@ const columns = [
   { key: "author", label: "Author" },
   { key: "status", label: "Status" },
   { key: "updated", label: "Last Update" },
-  { key: "redeemImages", label: "Redeem Images" },
-  { key: "active", label: "Active" },
-  { key: "check", label: "Check" }
+  { key: "links", label: "Internal Links" }
 ] as const;
 
 type ColumnKey = typeof columns[number]["key"];
@@ -29,14 +25,15 @@ const defaultVisibility: ColumnVisibility = {
   author: true,
   status: true,
   updated: true,
-  redeemImages: true,
-  active: true,
-  check: true
+  links: true
 };
 
 interface GamesClientProps {
   initialGames: AdminGameSummary[];
   authors: AdminAuthorOption[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 function sortGames(
@@ -54,8 +51,10 @@ function sortGames(
   });
 }
 
-export function GamesClient({ initialGames, authors }: GamesClientProps) {
+export function GamesClient({ initialGames, authors, total, page, pageSize }: GamesClientProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
   const [authorFilter, setAuthorFilter] = useState<string>("all");
@@ -63,15 +62,10 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
   const [sortKey, setSortKey] = useState<"updated_at" | "created_at">("updated_at");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [visibility, setVisibility] = useState<ColumnVisibility>(defaultVisibility);
-  const [flash, setFlash] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [refreshingSlug, setRefreshingSlug] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!flash) return;
-    const timer = setTimeout(() => setFlash(null), 4000);
-    return () => clearTimeout(timer);
-  }, [flash]);
+  const [, startTransition] = useTransition();
+  const pageCount = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
+  const canGoPrev = page > 1;
+  const canGoNext = page < pageCount;
 
   const filtered = useMemo(() => {
     const filteredGames = initialGames.filter((game) => {
@@ -92,14 +86,15 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
     return sortGames(filteredGames, sortKey, sortOrder);
   }, [initialGames, search, statusFilter, authorFilter, redeemImageFilter, sortKey, sortOrder]);
 
-  const totalCount = initialGames.length;
+  const pageItemCount = initialGames.length;
+  const totalCount = total;
   const filteredCount = filtered.length;
 
   const publishedCount = useMemo(
     () => initialGames.filter((game) => game.is_published).length,
     [initialGames]
   );
-  const draftCount = Math.max(totalCount - publishedCount, 0);
+  const draftCount = Math.max(pageItemCount - publishedCount, 0);
   const updatedTodayCount = useMemo(() => {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
@@ -108,30 +103,9 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
       return !Number.isNaN(updatedAt.getTime()) && updatedAt >= startOfDay;
     }).length;
   }, [initialGames]);
-  const totalActiveCodes = useMemo(
-    () => initialGames.reduce((total, game) => total + (game.counts.active ?? 0), 0),
-    [initialGames]
-  );
-  const averageActiveCodes = totalCount > 0 ? Math.round(totalActiveCodes / totalCount) : 0;
-
   const visibleColumnCount = useMemo(() => {
     return columns.reduce((total, column) => (visibility[column.key] ? total + 1 : total), 1); // +1 for actions column
   }, [visibility]);
-
-  function handleExportCsv() {
-    const rows = filtered.map((game) => ({
-      Name: game.name,
-      Slug: game.slug,
-      Author: game.author.name ?? "—",
-      Published: game.is_published ? "Yes" : "No",
-      "Last Update": format(new Date(game.updated_at), "yyyy-MM-dd HH:mm"),
-      "Redeem Images": String(game.redeem_image_count),
-      "Active Codes": String(game.counts.active),
-      "Check Codes": String(game.counts.check),
-      "Expired Codes": String(game.counts.expired)
-    }));
-    downloadCSV(rows, "games.csv");
-  }
 
   function openNewGame() {
     router.push("/admin/games/manage/new");
@@ -141,32 +115,16 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
     router.push(`/admin/games/manage/${game.id}`);
   }
 
-  function handleRefreshCodes(slug: string) {
-    setFlash(null);
-    setRefreshingSlug(slug);
-    startTransition(async () => {
-      try {
-        const result = await refreshGameCodes(slug);
-        if (!result?.success) {
-          setFlash({ tone: "error", message: result?.error ?? "Failed to refresh codes." });
-        } else {
-          const details = [];
-          if (typeof result.upserted === "number") {
-            details.push(`${result.upserted} updated`);
-          }
-          if (typeof result.removed === "number" && result.removed > 0) {
-            details.push(`${result.removed} removed`);
-          }
-          const message = details.length ? `Codes refreshed (${details.join(", ")}).` : "Codes refreshed.";
-          setFlash({ tone: "success", message });
-        }
-      } catch (error) {
-        setFlash({ tone: "error", message: error instanceof Error ? error.message : "Failed to refresh codes." });
-      } finally {
-        setRefreshingSlug(null);
-        router.refresh();
-      }
-    });
+  function changePage(nextPage: number) {
+    if (!pathname) return;
+    const params = new URLSearchParams(searchParams?.toString());
+    if (nextPage <= 1) {
+      params.delete("page");
+    } else {
+      params.set("page", String(nextPage));
+    }
+    const target = params.toString();
+    router.push(target ? `${pathname}?${params.toString()}` : pathname);
   }
 
   return (
@@ -187,16 +145,11 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
           <p className="mt-2 text-2xl font-semibold text-foreground">{updatedTodayCount}</p>
           <p className="mt-1 text-xs text-muted">Freshly maintained</p>
         </div>
-        <div className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-soft">
-          <p className="text-xs uppercase tracking-wide text-muted">Avg. active codes</p>
-          <p className="mt-2 text-2xl font-semibold text-foreground">{averageActiveCodes}</p>
-          <p className="mt-1 text-xs text-muted">Across {totalCount} games</p>
-        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/60 bg-surface/80 p-4 shadow-soft">
         <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-4 py-2 text-xs font-semibold text-muted">
-          Showing {filteredCount} of {totalCount} games
+          Showing {filteredCount} of {pageItemCount} on this page · page {page} of {pageCount} · {totalCount} total
         </span>
         <input
           type="search"
@@ -226,22 +179,6 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
             </option>
           ))}
         </select>
-        <select
-          value={redeemImageFilter}
-          onChange={(event) => setRedeemImageFilter(event.target.value as typeof redeemImageFilter)}
-          className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
-        >
-          <option value="all">All redeem images</option>
-          <option value="nonzero">With images</option>
-          <option value="zero">Without images</option>
-        </select>
-        <button
-          type="button"
-          onClick={handleExportCsv}
-          className="rounded-lg border border-border/60 bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:border-border/40 hover:bg-surface"
-        >
-          Export CSV
-        </button>
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="games-sort-key">
             Sort
@@ -295,17 +232,6 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
       </details>
 
       <div className="overflow-x-auto rounded-2xl border border-border/60 bg-surface/80 shadow-soft">
-        {flash ? (
-          <div
-            className={`mx-4 mt-4 rounded-lg border px-4 py-2 text-sm ${
-              flash.tone === "success"
-                ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-100"
-                : "border-red-400/60 bg-red-500/10 text-red-100"
-            }`}
-          >
-            {flash.message}
-          </div>
-        ) : null}
         <table className="min-w-full divide-y divide-border/60 text-sm">
           <thead className="bg-surface-muted/60 text-xs uppercase tracking-wide text-muted">
             <tr>
@@ -314,9 +240,7 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
               {visibility.author ? <th className="px-4 py-3 text-left">Author</th> : null}
               {visibility.status ? <th className="px-4 py-3 text-left">Status</th> : null}
               {visibility.updated ? <th className="px-4 py-3 text-left">Last update</th> : null}
-              {visibility.redeemImages ? <th className="px-4 py-3 text-right">Redeem images</th> : null}
-              {visibility.active ? <th className="px-4 py-3 text-right">Active</th> : null}
-              {visibility.check ? <th className="px-4 py-3 text-right">Check</th> : null}
+              {visibility.links ? <th className="px-4 py-3 text-right">Internal links</th> : null}
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -357,27 +281,9 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
                     {format(new Date(game.updated_at), "LLL d, yyyy HH:mm")}
                   </td>
                 ) : null}
-                {visibility.redeemImages ? (
-                  <td className="px-4 py-3 text-right text-muted">{game.redeem_image_count}</td>
+                {visibility.links ? (
+                  <td className="px-4 py-3 text-right text-muted">{game.internal_links ?? "—"}</td>
                 ) : null}
-                {visibility.active ? (
-                  <td className="px-4 py-3 text-right font-semibold text-foreground">
-                    <div className="flex items-center justify-end gap-2">
-                      <span>{game.counts.active}</span>
-                      <button
-                        type="button"
-                        aria-label="Refresh codes"
-                        title="Refresh codes"
-                        onClick={() => handleRefreshCodes(game.slug)}
-                        disabled={isPending && refreshingSlug === game.slug}
-                        className="rounded-full border border-border/60 bg-surface-muted p-1 text-xs text-foreground transition hover:border-border/30 hover:bg-surface focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        ↻
-                      </button>
-                    </div>
-                  </td>
-                ) : null}
-                {visibility.check ? <td className="px-4 py-3 text-right text-muted">{game.counts.check}</td> : null}
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
@@ -398,6 +304,30 @@ export function GamesClient({ initialGames, authors }: GamesClientProps) {
             ) : null}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted">
+        <span>
+          Page {page} of {pageCount} · {totalCount} total games
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => changePage(page - 1)}
+            disabled={!canGoPrev}
+            className="rounded-lg border border-border/60 px-3 py-1 text-xs font-semibold text-foreground transition hover:border-border/40 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => changePage(page + 1)}
+            disabled={!canGoNext}
+            className="rounded-lg border border-border/60 px-3 py-1 text-xs font-semibold text-foreground transition hover:border-border/40 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Next
+          </button>
+        </div>
       </div>
 
     </div>

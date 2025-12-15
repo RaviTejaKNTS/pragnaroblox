@@ -7,10 +7,15 @@ export const metadata = {
   title: "Manage Articles"
 };
 
-export default async function AdminArticlesPage() {
+export default async function AdminArticlesPage({
+  searchParams
+}: {
+  searchParams?: { page?: string };
+}) {
   const supabase = supabaseAdmin();
-  const [articles, authors] = await Promise.all([
-    fetchAdminArticles(supabase),
+  const page = Number(searchParams?.page ?? "1");
+  const [articlesResult, authors] = await Promise.all([
+    fetchAdminArticles(supabase, { page }),
     fetchAdminAuthors(supabase)
   ]);
 
@@ -23,7 +28,13 @@ export default async function AdminArticlesPage() {
         </p>
       </header>
 
-      <ArticlesClient initialArticles={articles} authors={authors} />
+      <ArticlesClient
+        initialArticles={articlesResult.articles}
+        authors={authors}
+        total={articlesResult.total}
+        page={articlesResult.page}
+        pageSize={articlesResult.pageSize}
+      />
     </div>
   );
 }

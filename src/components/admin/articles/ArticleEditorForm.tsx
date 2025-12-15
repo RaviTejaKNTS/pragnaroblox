@@ -643,15 +643,6 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
             </div>
           </div>
 
-          <div className="space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
-            <h2 className="text-lg font-semibold text-foreground">Article media</h2>
-            {slugValue ? (
-              <ScopedMediaManager basePath={`articles/${slugValue}`} label="Article media" />
-            ) : (
-              <p className="text-sm text-muted">Save the article first to manage its media.</p>
-            )}
-          </div>
-
           <div className="flex flex-col gap-3 rounded-2xl surface-panel p-4 shadow-soft">
             {article ? (
               <button
@@ -672,6 +663,18 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
               {isPending ? "Saving..." : "Save article"}
             </button>
           </div>
+        </div>
+
+        <div className="lg:col-span-2 space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Article media</h2>
+            <p className="text-xs text-muted">Store screenshots and embeds for this article. Uses the article slug as the folder.</p>
+          </div>
+          {slugValue ? (
+            <ScopedMediaManager basePath={`articles/${slugValue}`} label="Article media library" />
+          ) : (
+            <p className="text-sm text-muted">Save the article first to manage its media.</p>
+          )}
         </div>
       </form>
     </div>

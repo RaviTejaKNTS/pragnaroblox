@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   useTransition,
-  FormEvent,
   type ChangeEvent,
   type DragEvent
 } from "react";
@@ -19,10 +18,6 @@ import type { AdminAuthorOption, AdminGameSummary } from "@/lib/admin/games";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   saveGame,
-  upsertGameCode,
-  updateCodeStatus,
-  deleteCode,
-  refreshGameCodes,
   uploadGameImage,
   deleteGameById,
   backfillGameSocialLinks
@@ -143,7 +138,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-type TabKey = "content" | "meta" | "codes" | "media";
+type TabKey = "content" | "meta" | "media";
 
 export function GameEditorForm({
   game,
@@ -224,7 +219,7 @@ export function GameEditorForm({
 
   useEffect(() => {
     reset(defaultValues, { keepDirty: false, keepDirtyValues: false });
-    setStatusMessage(null);
+        setStatusMessage(null);
     setMetaFlash(null);
     setMarkdownError(null);
     setIsDragging(false);
@@ -653,11 +648,7 @@ export function GameEditorForm({
           return;
         }
 
-        if (result.syncErrors?.length) {
-          setStatusMessage(`Saved but failed to fetch codes: ${result.syncErrors.join(", ")}`);
-        } else {
-          setStatusMessage("Saved changes");
-        }
+        setStatusMessage("Saved changes");
 
         const nextValues: FormValues = {
           ...finalValues,
@@ -676,10 +667,6 @@ export function GameEditorForm({
       }
     });
   });
-
-  const activeCodes = game?.codes.active ?? [];
-  const checkCodes = game?.codes.check ?? [];
-  const expiredCodes = game?.codes.expired ?? [];
 
   return (
     <div className="space-y-8 pb-16">
@@ -1245,221 +1232,6 @@ export function GameEditorForm({
         </section>
       </form>
 
-      <section className="space-y-6 rounded-2xl surface-panel p-6 shadow-soft">
-        <h2 className="text-lg font-semibold text-foreground">Codes</h2>
-        <CodesTab game={game} />
-      </section>
-    </div>
-  );
-}
-
-function CodesTab({ game }: { game: AdminGameSummary | null }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [refreshing, setRefreshing] = useState(false);
-  const [flash, setFlash] = useState<{ tone: "success" | "error"; message: string } | null>(null);
-  const [formState, setFormState] = useState({ status: "active" as "active" | "check" | "expired" });
-
-  if (!game) {
-    return <p className="text-sm text-muted">Save the game first to manage codes.</p>;
-  }
-
-  useEffect(() => {
-    if (!flash) return;
-    const timer = setTimeout(() => setFlash(null), 4000);
-    return () => clearTimeout(timer);
-  }, [flash]);
-
-  const handleStatusChange = (id: string, status: "active" | "check" | "expired") => {
-    const formData = new FormData();
-    formData.append("id", id);
-    formData.append("status", status);
-    formData.append("game_id", game.id);
-    startTransition(async () => {
-      await updateCodeStatus(formData);
-      router.refresh();
-    });
-  };
-
-  const handleDelete = (id: string) => {
-    const formData = new FormData();
-    formData.append("id", id);
-    formData.append("game_id", game.id);
-    startTransition(async () => {
-      await deleteCode(formData);
-      router.refresh();
-    });
-  };
-
-  const triggerRefresh = () => {
-    if (!game) return;
-    setFlash(null);
-    setRefreshing(true);
-    startTransition(async () => {
-      try {
-        const result = await refreshGameCodes(game.slug);
-        if (!result?.success) {
-          setFlash({ tone: "error", message: result?.error ?? "Failed to refresh codes." });
-        } else {
-          const parts = [];
-          if (typeof result.upserted === "number") parts.push(`${result.upserted} updated`);
-          if (typeof result.removed === "number" && result.removed > 0) parts.push(`${result.removed} removed`);
-          const message = parts.length ? `Codes refreshed (${parts.join(", ")}).` : "Codes refreshed.";
-          setFlash({ tone: "success", message });
-          router.refresh();
-        }
-      } catch (error) {
-        setFlash({ tone: "error", message: error instanceof Error ? error.message : "Failed to refresh codes." });
-      } finally {
-        setRefreshing(false);
-      }
-    });
-  };
-
-  const handleAdd = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    formData.append("game_id", game.id);
-    startTransition(async () => {
-      await upsertGameCode(formData);
-      form.reset();
-      setFormState({ status: "active" });
-      router.refresh();
-    });
-  };
-
-  return (
-    <div className="space-y-6">
-      {flash ? (
-        <div
-          className={`rounded-lg border px-4 py-2 text-sm ${
-            flash.tone === "success"
-              ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-100"
-              : "border-red-400/60 bg-red-500/10 text-red-100"
-          }`}
-        >
-          {flash.message}
-        </div>
-      ) : null}
-
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Manage codes</h3>
-        <button
-          type="button"
-          onClick={triggerRefresh}
-          disabled={refreshing || isPending}
-          className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-surface px-3 py-1 text-xs font-semibold text-foreground transition hover:border-border/30 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <span className={refreshing ? "animate-spin" : ""}>↻</span>
-          <span>{refreshing ? "Refreshing…" : "Refresh codes"}</span>
-        </button>
-      </div>
-
-      <form className="rounded-lg border border-border/60 bg-surface px-4 py-4 text-sm" onSubmit={handleAdd}>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Add manual code</h3>
-        <div className="grid gap-3 md:grid-cols-3">
-          <input
-            name="code"
-            placeholder="CODE123"
-            className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
-            required
-          />
-          <input
-            name="rewards_text"
-            placeholder="Reward"
-            className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
-          />
-          <select
-            name="status"
-            value={formState.status}
-            onChange={(event) => setFormState({ status: event.target.value as typeof formState.status })}
-            className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
-          >
-            <option value="active">Active</option>
-            <option value="check">Needs check</option>
-            <option value="expired">Expired</option>
-          </select>
-        </div>
-        <div className="mt-3 flex justify-end">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? "Adding…" : "Add code"}
-          </button>
-        </div>
-      </form>
-
-      <div className="space-y-4">
-        <CodeList
-          title="Active codes"
-          codes={game.codes.active}
-          onStatusChange={handleStatusChange}
-          onDelete={handleDelete}
-        />
-        <CodeList
-          title="Codes to double-check"
-          codes={game.codes.check}
-          onStatusChange={handleStatusChange}
-          onDelete={handleDelete}
-        />
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Expired codes ({game.codes.expired.length})</h3>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
-            {game.codes.expired.length ? game.codes.expired.map((code) => (
-              <span key={code} className="rounded-full border border-border/40 bg-surface-muted px-3 py-1">
-                {code}
-              </span>
-            )) : <span>No expired codes tracked.</span>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type CodeListProps = {
-  title: string;
-  codes: AdminGameSummary["codes"]["active"];
-  onStatusChange: (id: string, status: "active" | "check" | "expired") => void;
-  onDelete: (id: string) => void;
-};
-
-function CodeList({ title, codes, onStatusChange, onDelete }: CodeListProps) {
-  return (
-    <div>
-      <h3 className="text-sm font-semibold text-foreground">{title} ({codes.length})</h3>
-      <div className="mt-2 space-y-2">
-        {codes.map((code) => (
-          <div key={code.id} className="grid gap-2 rounded-lg border border-border/60 bg-surface px-3 py-3 text-sm md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="font-semibold text-foreground">{code.code}</p>
-              <p className="text-xs text-muted">{code.rewards_text ?? "No reward"}</p>
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <select
-                defaultValue={code.status}
-                onChange={(event) => onStatusChange(code.id, event.target.value as "active" | "check" | "expired")}
-                className="rounded-lg border border-border/60 bg-background px-2 py-1 text-xs"
-              >
-                <option value="active">Active</option>
-                <option value="check">Needs check</option>
-                <option value="expired">Expired</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => onDelete(code.id)}
-                className="rounded-lg border border-border/60 px-2 py-1 text-xs text-muted hover:text-red-300"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-        {codes.length === 0 ? <p className="text-xs text-muted">Nothing here yet.</p> : null}
-      </div>
     </div>
   );
 }

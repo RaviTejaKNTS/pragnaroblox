@@ -9,12 +9,25 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function AdminGamesPage() {
+export default async function AdminGamesPage({
+  searchParams
+}: {
+  searchParams?: { page?: string };
+}) {
   const supabase = supabaseAdmin();
-  const [games, authors] = await Promise.all([
-    fetchAdminGames(supabase),
+  const page = Number(searchParams?.page ?? "1");
+  const [gameResult, authors] = await Promise.all([
+    fetchAdminGames(supabase, { page }),
     fetchAdminAuthors(supabase)
   ]);
 
-  return <GamesClient initialGames={games} authors={authors} />;
+  return (
+    <GamesClient
+      initialGames={gameResult.games}
+      authors={authors}
+      total={gameResult.total}
+      page={gameResult.page}
+      pageSize={gameResult.pageSize}
+    />
+  );
 }
