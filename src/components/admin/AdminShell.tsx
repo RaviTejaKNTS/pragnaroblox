@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 import { useAdminSession } from "@/hooks/use-admin-session";
+import { EditorToolbarProvider } from "@/components/admin/editor/EditorToolbarContext";
 
 const adminNavItems = [
   { href: "/admin/games", label: "Games", icon: "🎮" },
@@ -23,7 +24,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const roleResolved = role !== undefined;
   const displayEmail = email || "Unknown";
   const showLoading = loading && !session;
-  const fullWidthLayout = pathname?.startsWith("/admin/articles/write");
+  const fullWidthLayout =
+    pathname?.startsWith("/admin/articles/write") || pathname?.startsWith("/admin/games/manage");
+  const isEditorRoute = fullWidthLayout;
 
   useEffect(() => {
     if (loading || !roleResolved) return;
@@ -89,60 +92,69 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const fullBleedPreferred = useMemo(() => pathname?.startsWith("/admin"), [pathname]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0e1220] via-[#0f1628] to-[#0c1022] text-foreground">
-      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex w-full items-center justify-between gap-3 px-4 py-2.5 md:px-5">
-          <div className="flex items-center gap-3">
-            <Link href="/admin" className="text-base font-semibold text-foreground">
-              Admin Panel
-            </Link>
-          </div>
-          <div className="flex flex-1 items-center justify-center gap-2 overflow-hidden">
-            <div className="no-scrollbar flex max-w-4xl flex-1 items-center gap-1.5 overflow-x-auto rounded-full border border-border/50 bg-surface/80 px-2 py-1 text-sm shadow-soft">
-              {sidebarLinks.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={clsx(
-                    "inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 transition",
-                    item.active
-                      ? "bg-accent/15 text-foreground ring-1 ring-accent/30"
-                      : "text-muted hover:bg-surface-muted hover:text-foreground"
-                  )}
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  <span className="hidden sm:inline">{item.label}</span>
-                </Link>
-              ))}
+    <EditorToolbarProvider>
+      <div className="min-h-screen bg-gradient-to-br from-[#0e1220] via-[#0f1628] to-[#0c1022] text-foreground">
+        {!isEditorRoute ? (
+          <header className="sticky top-0 z-20 border-b border-border/60 bg-background/90 backdrop-blur">
+            <div className="mx-auto flex w-full items-center justify-between gap-3 px-4 py-2.5 md:px-5">
+            <div className="flex items-center gap-3">
+              <Link href="/admin" className="text-base font-semibold text-foreground">
+                Admin Panel
+              </Link>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-border/60 bg-surface px-3 py-1.5 text-[11px] text-muted">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="font-semibold text-foreground">
-                {showLoading ? "Syncing…" : displayEmail}
-              </span>
+            <div className="flex flex-1 items-center justify-center gap-2 overflow-hidden">
+              <div className="no-scrollbar flex max-w-4xl flex-1 items-center gap-1.5 overflow-x-auto rounded-full border border-border/50 bg-surface/80 px-2 py-1 text-sm shadow-soft">
+                {sidebarLinks.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={clsx(
+                      "inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 transition",
+                      item.active
+                        ? "bg-accent/15 text-foreground ring-1 ring-accent/30"
+                        : "text-muted hover:bg-surface-muted hover:text-foreground"
+                    )}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              disabled={signingOut}
-              className="rounded-full bg-foreground/90 px-3 py-2 text-[11px] font-semibold text-background transition hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {signingOut ? "Sign out…" : "Sign out"}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main
-        className={clsx(
-          "mx-auto flex-1 w-full px-4 pb-10 pt-6 md:px-5",
-          fullWidthLayout || fullBleedPreferred ? "max-w-none" : "max-w-6xl"
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full border border-border/60 bg-surface px-3 py-1.5 text-[11px] text-muted">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <span className="font-semibold text-foreground">
+                  {showLoading ? "Syncing…" : displayEmail}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="rounded-full bg-foreground/90 px-3 py-2 text-[11px] font-semibold text-background transition hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {signingOut ? "Sign out…" : "Sign out"}
+              </button>
+            </div>
+            </div>
+          </header>
+        ) : (
+          <header className="sticky top-0 z-30 bg-background/95 backdrop-blur">
+            <div id="editor-toolbar-slot" className="mx-auto w-full px-4 py-2 md:px-5" />
+          </header>
         )}
-      >
-        <div className="w-full">{children}</div>
-      </main>
-    </div>
+
+        <main
+          className={clsx(
+            "mx-auto flex-1 w-full px-4 pb-10 md:px-5",
+            isEditorRoute ? "pt-0" : "pt-6",
+            fullWidthLayout || fullBleedPreferred ? "max-w-none" : "max-w-6xl"
+          )}
+        >
+          <div className="w-full">{children}</div>
+        </main>
+      </div>
+    </EditorToolbarProvider>
   );
 }

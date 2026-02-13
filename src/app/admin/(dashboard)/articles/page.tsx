@@ -10,10 +10,11 @@ export const metadata = {
 export default async function AdminArticlesPage({
   searchParams
 }: {
-  searchParams?: { page?: string };
+  searchParams?: { page?: string } | Promise<{ page?: string }>;
 }) {
   const supabase = supabaseAdmin();
-  const page = Number(searchParams?.page ?? "1");
+  const resolvedSearchParams = await searchParams;
+  const page = Number(resolvedSearchParams?.page ?? "1");
   const [articlesResult, authors] = await Promise.all([
     fetchAdminArticles(supabase, { page }),
     fetchAdminAuthors(supabase)

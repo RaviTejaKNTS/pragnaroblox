@@ -3,14 +3,17 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { marked } from "marked";
+import { useEditorToolbar } from "@/components/admin/editor/EditorToolbarContext";
 
 const PLACEHOLDER_DEFINITIONS = [
   {
@@ -536,17 +539,29 @@ function normalizeOrderedLists(container: HTMLElement) {
 }
 
 export function RichMarkdownEditor({ label, value, onChange, placeholder, height }: RichMarkdownEditorProps) {
+  const editorId = useId();
   const editorRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"rich" | "markdown">("markdown");
   const [formatState, setFormatState] = useState<EditorFormatState>(DEFAULT_FORMAT_STATE);
   const [activePlaceholder, setActivePlaceholder] = useState<HTMLElement | null>(null);
   const [activeTableCell, setActiveTableCell] = useState<HTMLTableCellElement | null>(null);
   const [linkPreview, setLinkPreview] = useState<LinkPreviewState | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const toolbarContext = useEditorToolbar();
+  const [toolbarHost, setToolbarHost] = useState<HTMLElement | null>(null);
   const lastMarkdownRef = useRef<string>(value ?? "");
   const isSettingContentRef = useRef(false);
   const lastSelectionRef = useRef<Range | null>(null);
   const hoveredLinkRef = useRef<HTMLAnchorElement | null>(null);
   const hideLinkPreviewTimeoutRef = useRef<number | null>(null);
+  const hasToolbarContext = Boolean(toolbarContext);
+  const isToolbarActive = !toolbarContext || toolbarContext.activeId === editorId;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    setToolbarHost(document.getElementById("editor-toolbar-slot"));
+  }, []);
 
   const moveCaretToElementStart = useCallback((element: HTMLElement) => {
     const range = document.createRange();
@@ -718,6 +733,41 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
       updateEmptyState(editorRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    if (!toolbarContext) return;
+    if (toolbarContext.activeId === null) {
+      toolbarContext.setActiveId(editorId);
+    }
+  }, [editorId, toolbarContext]);
+
+  useEffect(() => {
+    if (!isToolbarActive && showMoreMenu) {
+      setShowMoreMenu(false);
+    }
+  }, [isToolbarActive, showMoreMenu]);
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handlePointer = (event: MouseEvent | TouchEvent) => {
+      if (!moreMenuRef.current) return;
+      if (event.target instanceof Node && moreMenuRef.current.contains(event.target)) return;
+      setShowMoreMenu(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowMoreMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("touchstart", handlePointer, { passive: true });
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("touchstart", handlePointer);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMoreMenu]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -1095,67 +1145,69 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
 
   const toolbarButtonClass = useMemo(
     () =>
-      "inline-flex h-8 items-center justify-center rounded-md border border-border/60 bg-surface px-2 text-xs font-semibold text-muted transition hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+      "inline-flex h-7 items-center justify-center rounded-md bg-transparent px-2 text-[11px] font-semibold text-muted/80 transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
     []
   );
 
   const heightValue = Math.max(height ?? 420, 320);
+  const toolbarWrapperClass = hasToolbarContext
+    ? "flex w-full flex-col gap-2"
+    : "sticky top-0 z-30 -mx-4 mb-6 flex flex-col gap-2 bg-background/95 px-4 py-2 backdrop-blur md:-mx-5 md:px-5";
+  const handleEditorFocus = useCallback(() => {
+    toolbarContext?.setActiveId(editorId);
+  }, [editorId, toolbarContext]);
 
-  return (
-    <>
-      <div className="overflow-hidden rounded-2xl border border-border/70 bg-surface shadow-soft" data-placeholder-enhanced="true">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-surface-muted/70 px-4 py-3">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="rounded-md bg-background px-3 py-1 font-semibold text-foreground">{label}</span>
+  const toolbarContent = (
+    <div className={toolbarWrapperClass}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-muted/70">
+          <span className="uppercase tracking-[0.2em] text-muted/70">{label}</span>
           {mode === "rich" && activePlaceholder ? (
-            <div className="flex items-center gap-2 rounded-full bg-background/70 px-3 py-1 text-[11px] font-semibold text-muted">
-              <span className="text-muted">Placeholder:</span>
-              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-accent">
+            <div className="flex items-center gap-2 rounded-full bg-surface/50 px-2 py-1 text-[10px] font-semibold text-muted/70">
+              <span>Placeholder</span>
+              <span className="rounded-full bg-accent/15 px-2 py-0.5 text-accent">
                 {activePlaceholder.dataset.placeholderKey}
               </span>
-              <button type="button" className="text-accent transition hover:underline" onClick={editActivePlaceholder}>
+              <button type="button" className="text-accent transition hover:text-foreground" onClick={editActivePlaceholder}>
                 Edit
               </button>
-              <button type="button" className="text-destructive transition hover:underline" onClick={removeActivePlaceholder}>
+              <button type="button" className="text-destructive/80 transition hover:text-destructive" onClick={removeActivePlaceholder}>
                 Remove
               </button>
             </div>
           ) : null}
         </div>
-        <div className="flex items-center gap-2 text-xs font-semibold text-muted">
-          <span className="rounded-full bg-background/80 px-2 py-1">Full-page editor</span>
-          <div className="flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-1">
-            <button
-              type="button"
-              className={clsx(
-                "rounded-full px-3 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                mode === "rich" ? "bg-accent/15 text-accent" : "hover:text-foreground"
-              )}
-              onClick={() => setMode("rich")}
-            >
-              Visual
-            </button>
-            <button
-              type="button"
-              className={clsx(
-                "rounded-full px-3 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                mode === "markdown" ? "bg-accent/15 text-accent" : "hover:text-foreground"
-              )}
-              onClick={() => setMode("markdown")}
-            >
-              Markdown
-            </button>
-          </div>
+        <div className="ml-auto flex items-center gap-1 rounded-full bg-surface/50 p-1 text-[11px] font-semibold text-muted/70">
+          <button
+            type="button"
+            className={clsx(
+              "rounded-full px-3 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              mode === "rich" ? "bg-foreground/10 text-foreground" : "hover:text-foreground"
+            )}
+            onClick={() => setMode("rich")}
+          >
+            Visual
+          </button>
+          <button
+            type="button"
+            className={clsx(
+              "rounded-full px-3 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              mode === "markdown" ? "bg-foreground/10 text-foreground" : "hover:text-foreground"
+            )}
+            onClick={() => setMode("markdown")}
+          >
+            Markdown
+          </button>
         </div>
       </div>
 
       {mode === "rich" ? (
-        <div className="flex flex-col gap-3 border-b border-border/70 bg-background/60 px-4 py-3">
+        <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-1">
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.bold ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.bold ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("bold")}
                 title="Bold"
@@ -1164,7 +1216,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
               </button>
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.italic ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.italic ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("italic")}
                 title="Italic"
@@ -1173,7 +1225,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
               </button>
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.underline ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.underline ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("underline")}
                 title="Underline"
@@ -1182,7 +1234,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
               </button>
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.blockquote ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.blockquote ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("formatBlock", "BLOCKQUOTE")}
                 title="Block quote"
@@ -1191,7 +1243,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
               </button>
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.code ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.code ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("formatBlock", "PRE")}
                 title="Code block"
@@ -1204,7 +1256,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
                 <button
                   key={level}
                   type="button"
-                  className={`${toolbarButtonClass} ${formatState.activeHeading === `h${level}` ? "!border-accent !text-accent" : ""}`}
+                  className={`${toolbarButtonClass} ${formatState.activeHeading === `h${level}` ? "bg-foreground/10 text-foreground" : ""}`}
                   onMouseDown={handleToolbarMouseDown}
                   onClick={() => setHeading(level)}
                   title={`Heading ${level}`}
@@ -1214,7 +1266,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
               ))}
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.activeHeading === "p" ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.activeHeading === "p" ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => setHeading(0)}
                 title="Paragraph"
@@ -1225,7 +1277,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.bulletList ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.bulletList ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("insertUnorderedList")}
                 title="Bulleted list"
@@ -1234,7 +1286,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
               </button>
               <button
                 type="button"
-                className={`${toolbarButtonClass} ${formatState.orderedList ? "!border-accent !text-accent" : ""}`}
+                className={`${toolbarButtonClass} ${formatState.orderedList ? "bg-foreground/10 text-foreground" : ""}`}
                 onMouseDown={handleToolbarMouseDown}
                 onClick={() => exec("insertOrderedList")}
                 title="Numbered list"
@@ -1242,126 +1294,195 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
                 1 2 3
               </button>
             </div>
-            <div className="flex items-center gap-1">
+            <div ref={moreMenuRef} className="relative">
               <button
                 type="button"
-                className={toolbarButtonClass}
+                className="inline-flex items-center gap-2 rounded-full bg-surface/50 px-3 py-1 text-[11px] font-semibold text-foreground/80 transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 onMouseDown={handleToolbarMouseDown}
-                onClick={insertLink}
-                title="Insert link"
+                onClick={() => setShowMoreMenu((prev) => !prev)}
               >
-                Link
+                More
+                <span className="text-[10px]">▾</span>
               </button>
-              <button
-                type="button"
-                className={toolbarButtonClass}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={removeLink}
-                title="Remove link"
-              >
-                Unlink
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                className={toolbarButtonClass}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={insertTable}
-                title="Insert table"
-              >
-                Table
-              </button>
-              <button
-                type="button"
-                className={clsx(toolbarButtonClass, !tableContext && "opacity-50")}
-                disabled={!tableContext}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => insertTableRow("above")}
-                title="Row above"
-              >
-                Row ↑
-              </button>
-              <button
-                type="button"
-                className={clsx(toolbarButtonClass, !tableContext && "opacity-50")}
-                disabled={!tableContext}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => insertTableRow("below")}
-                title="Row below"
-              >
-                Row ↓
-              </button>
-              <button
-                type="button"
-                className={clsx(toolbarButtonClass, !tableContext && "opacity-50")}
-                disabled={!tableContext}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => insertTableColumn("left")}
-                title="Column left"
-              >
-                Col ←
-              </button>
-              <button
-                type="button"
-                className={clsx(toolbarButtonClass, !tableContext && "opacity-50")}
-                disabled={!tableContext}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={() => insertTableColumn("right")}
-                title="Column right"
-              >
-                Col →
-              </button>
-              <button
-                type="button"
-                className={clsx(toolbarButtonClass, !tableContext && "opacity-50")}
-                disabled={!tableContext}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={removeTableRow}
-                title="Delete row"
-              >
-                Del row
-              </button>
-              <button
-                type="button"
-                className={clsx(toolbarButtonClass, !tableContext && "opacity-50")}
-                disabled={!tableContext}
-                onMouseDown={handleToolbarMouseDown}
-                onClick={removeTableColumn}
-                title="Delete column"
-              >
-                Del col
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {PLACEHOLDER_DEFINITIONS.map((definition) => (
-                <button
-                  key={definition.key}
-                  type="button"
-                  className={toolbarButtonClass}
-                  onMouseDown={handleToolbarMouseDown}
-                  onClick={() => insertPlaceholder(definition)}
-                  title={definition.title}
-                >
-                  {definition.shortLabel}
-                </button>
-              ))}
+              {showMoreMenu ? (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-surface/95 p-2 text-xs shadow-soft">
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      className="w-full rounded-lg px-3 py-2 text-left font-semibold text-foreground/80 transition hover:bg-surface-muted/60 hover:text-foreground"
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        insertLink();
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Insert link
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded-lg px-3 py-2 text-left font-semibold text-foreground/80 transition hover:bg-surface-muted/60 hover:text-foreground"
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        removeLink();
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Remove link
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded-lg px-3 py-2 text-left font-semibold text-foreground/80 transition hover:bg-surface-muted/60 hover:text-foreground"
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        insertTable();
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Insert table
+                    </button>
+                  </div>
+
+                  <div className="my-2 h-px bg-border/40" />
+
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      className={clsx(
+                        "w-full rounded-lg px-3 py-2 text-left font-semibold transition hover:bg-surface-muted/60",
+                        tableContext ? "text-foreground/80" : "text-muted/50"
+                      )}
+                      disabled={!tableContext}
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        insertTableRow("above");
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Table row above
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "w-full rounded-lg px-3 py-2 text-left font-semibold transition hover:bg-surface-muted/60",
+                        tableContext ? "text-foreground/80" : "text-muted/50"
+                      )}
+                      disabled={!tableContext}
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        insertTableRow("below");
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Table row below
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "w-full rounded-lg px-3 py-2 text-left font-semibold transition hover:bg-surface-muted/60",
+                        tableContext ? "text-foreground/80" : "text-muted/50"
+                      )}
+                      disabled={!tableContext}
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        insertTableColumn("left");
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Table column left
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "w-full rounded-lg px-3 py-2 text-left font-semibold transition hover:bg-surface-muted/60",
+                        tableContext ? "text-foreground/80" : "text-muted/50"
+                      )}
+                      disabled={!tableContext}
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        insertTableColumn("right");
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Table column right
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "w-full rounded-lg px-3 py-2 text-left font-semibold transition hover:bg-surface-muted/60",
+                        tableContext ? "text-foreground/80" : "text-muted/50"
+                      )}
+                      disabled={!tableContext}
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        removeTableRow();
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Delete table row
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(
+                        "w-full rounded-lg px-3 py-2 text-left font-semibold transition hover:bg-surface-muted/60",
+                        tableContext ? "text-foreground/80" : "text-muted/50"
+                      )}
+                      disabled={!tableContext}
+                      onMouseDown={handleToolbarMouseDown}
+                      onClick={() => {
+                        removeTableColumn();
+                        setShowMoreMenu(false);
+                      }}
+                    >
+                      Delete table column
+                    </button>
+                  </div>
+
+                  <div className="my-2 h-px bg-border/40" />
+
+                  <div className="grid gap-1">
+                    {PLACEHOLDER_DEFINITIONS.map((definition) => (
+                      <button
+                        key={definition.key}
+                        type="button"
+                        className="w-full rounded-lg px-3 py-2 text-left font-semibold text-foreground/80 transition hover:bg-surface-muted/60 hover:text-foreground"
+                        onMouseDown={handleToolbarMouseDown}
+                        onClick={() => {
+                          insertPlaceholder(definition);
+                          setShowMoreMenu(false);
+                        }}
+                      >
+                        {definition.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted">
-            <span className="rounded-full bg-surface px-2 py-1">Shift+Enter for soft break</span>
-            <span className="rounded-full bg-surface px-2 py-1">Drag images to gallery uploader</span>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted/70">
+            <span className="rounded-full bg-surface/50 px-2 py-0.5">Shift+Enter for soft break</span>
+            <span className="rounded-full bg-surface/50 px-2 py-0.5">Drag images to gallery uploader</span>
           </div>
         </div>
       ) : null}
+    </div>
+  );
 
-      <div className="relative">
+  const toolbarNode =
+    toolbarHost && toolbarContext && isToolbarActive ? createPortal(toolbarContent, toolbarHost) : toolbarContent;
+  const shouldRenderToolbar = !hasToolbarContext || isToolbarActive;
+
+  return (
+    <>
+      {shouldRenderToolbar ? toolbarNode : null}
+      <div className="relative" data-placeholder-enhanced="true">
         <div
           ref={editorRef}
           className="rich-editor-area"
           contentEditable={mode === "rich"}
           suppressContentEditableWarning
           spellCheck={mode === "rich"}
+          onFocus={handleEditorFocus}
           data-placeholder={placeholder ?? "Write your content…"}
           style={{
             minHeight: heightValue,
@@ -1373,17 +1494,17 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
             value={value ?? ""}
             onChange={(event) => onChange(event.target.value)}
             spellCheck
-            className="w-full resize-vertical border-0 bg-transparent px-6 py-5 font-mono text-sm text-foreground outline-none focus-visible:ring-0"
+            onFocus={handleEditorFocus}
+            className="w-full resize-vertical border-0 bg-transparent px-6 py-5 text-lg text-foreground outline-none focus-visible:ring-0"
             style={{ minHeight: heightValue } as CSSProperties}
             placeholder={placeholder ?? "Write your content…"}
           />
         ) : null}
       </div>
-    </div>
 
       {mode === "rich" && linkPreview ? (
         <div
-          className="rich-link-tooltip fixed z-50 flex max-w-xs -translate-x-1/2 flex-col gap-2 rounded-xl border border-border/80 bg-background/95 p-3 text-xs text-muted shadow-lg backdrop-blur"
+          className="rich-link-tooltip fixed z-50 flex max-w-xs -translate-x-1/2 flex-col gap-2 rounded-xl bg-background/95 p-3 text-xs text-muted shadow-lg backdrop-blur"
           style={{ top: linkPreview.top, left: linkPreview.left }}
           onMouseEnter={cancelHideLinkPreview}
           onMouseLeave={scheduleHideLinkPreview}
@@ -1393,7 +1514,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           </span>
           <button
             type="button"
-            className="self-start rounded-md border border-border/60 bg-surface px-2 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="self-start rounded-md bg-surface/60 px-2 py-1 text-xs font-semibold text-accent transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             onClick={handleEditHoveredLink}
           >
             Edit link
@@ -1404,23 +1525,23 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
         .rich-editor-area {
           position: relative;
           width: 100%;
-          border-radius: 1.25rem;
+          border-radius: 1.5rem;
           background: transparent;
-          padding: 1.25rem;
+          padding: 1.75rem 1.5rem 2.5rem;
           outline: none;
-          font-size: 0.98rem;
+          font-size: 1.15rem;
           color: rgb(var(--color-foreground));
-          overflow-y: auto;
-          line-height: 1.75;
-          letter-spacing: 0.01em;
+          overflow-y: visible;
+          line-height: 1.85;
+          letter-spacing: 0.005em;
           word-break: break-word;
         }
         .rich-editor-area[data-empty="true"]:before {
           content: attr(data-placeholder);
           position: absolute;
-          top: 1.25rem;
-          left: 1.25rem;
-          color: rgb(var(--color-muted));
+          top: 1.75rem;
+          left: 1.5rem;
+          color: rgba(var(--color-muted), 0.8);
           pointer-events: none;
         }
         .rich-editor-area p,
@@ -1479,35 +1600,32 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           margin-top: 0.35rem;
         }
         .rich-editor-area blockquote {
-          border-left: 4px solid rgba(var(--color-border), 0.9);
           padding: 0.9rem 1.25rem;
           color: rgb(var(--color-foreground));
           margin: 1.1rem 0;
-          background: rgba(var(--color-surface-muted), 0.38);
+          background: rgba(var(--color-surface), 0.5);
           border-radius: 0.9rem;
           font-style: italic;
         }
         .rich-editor-area pre {
-          background: rgba(148, 163, 184, 0.16);
-          border-radius: 0.75rem;
-          padding: 1rem;
+          background: rgba(var(--color-surface-muted), 0.5);
+          border-radius: 0.85rem;
+          padding: 1rem 1.1rem;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
           overflow-x: auto;
-          border: 1px solid rgba(var(--color-border), 0.6);
-          line-height: 1.5;
+          line-height: 1.55;
         }
         .rich-editor-area code {
           background: rgba(var(--color-surface-muted), 0.55);
-          border: 1px solid rgba(var(--color-border), 0.6);
           border-radius: 0.55rem;
           padding: 0.18rem 0.5rem;
-          font-size: 0.92rem;
+          font-size: 0.95rem;
         }
         .rich-editor-area pre code {
           background: transparent;
           border: none;
           padding: 0;
-          font-size: 0.95rem;
+          font-size: 0.98rem;
         }
         .rich-editor-area hr {
           border: 0;
@@ -1522,21 +1640,24 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
         }
         .rich-editor-area table {
           width: 100%;
-          border-collapse: collapse;
+          border-collapse: separate;
+          border-spacing: 0;
           margin: 1.25rem 0;
-          border: 1px solid rgba(var(--color-border), 0.6);
-          border-radius: 0.75rem;
+          border-radius: 0.9rem;
           overflow: hidden;
+          background: rgba(var(--color-surface), 0.5);
         }
         .rich-editor-area th,
         .rich-editor-area td {
-          border: 1px solid rgb(var(--color-border));
-          padding: 0.75rem;
+          padding: 0.75rem 0.85rem;
           text-align: left;
-          font-size: 0.95rem;
+          font-size: 0.98rem;
+        }
+        .rich-editor-area tr + tr td {
+          border-top: 1px solid rgba(var(--color-border), 0.25);
         }
         .rich-editor-area th {
-          background: rgba(148, 163, 184, 0.12);
+          background: rgba(var(--color-surface-strong), 0.4);
           font-weight: 700;
           color: rgb(var(--color-foreground));
         }
@@ -1579,8 +1700,7 @@ export function RichMarkdownEditor({ label, value, onChange, placeholder, height
           max-width: 100%;
           display: block;
           border-radius: 0.9rem;
-          border: 1px solid rgba(var(--color-border), 0.6);
-          margin: 1rem 0;
+          margin: 1.1rem 0;
         }
       `}</style>
     </>

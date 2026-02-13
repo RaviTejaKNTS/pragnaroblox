@@ -3,7 +3,6 @@ type SupabaseConfig = {
   supabaseKey: string;
   supabaseServiceRole?: string;
   cookieOptions: {
-    name: string;
     path: string;
     domain: string;
     sameSite: "lax" | "strict" | "none";
@@ -24,7 +23,6 @@ export function getSupabaseConfig(): SupabaseConfig {
   }
 
   const cookieOptions: SupabaseConfig["cookieOptions"] = {
-    name: "sb-access-token",
     path: "/",
     // Empty string falls back to host-only cookies when a custom domain is not provided.
     domain: process.env.COOKIE_DOMAIN || "",

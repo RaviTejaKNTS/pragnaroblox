@@ -14,25 +14,25 @@ export class AdminAccessError extends Error {
 type RequireAdminResult = {
   supabase: SupabaseClient;
   session: Session;
-  role: string;
+  role: "admin";
 };
 
 async function fetchAdminRole(client: SupabaseClient, userId: string) {
   const { data, error } = await client
-    .from("admin_users")
+    .from("app_users")
     .select("role")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error) throw error;
-  return data?.role ?? null;
+  return data?.role === "admin" ? "admin" : null;
 }
 
 export async function requireAdmin(): Promise<RequireAdminResult> {
   const { supabaseUrl, supabaseKey, cookieOptions } = getSupabaseConfig();
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerComponentClient({
-    cookies: () => cookieStore
+    cookies: () => cookieStore as unknown as ReturnType<typeof cookies>
   }, {
     supabaseUrl,
     supabaseKey,
@@ -57,8 +57,9 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
 
 export async function requireAdminAction() {
   const { supabaseUrl, supabaseKey, cookieOptions } = getSupabaseConfig();
+  const cookieStore = await cookies();
   const supabase = createServerActionClient({
-    cookies
+    cookies: () => cookieStore as unknown as ReturnType<typeof cookies>
   }, {
     supabaseUrl,
     supabaseKey,

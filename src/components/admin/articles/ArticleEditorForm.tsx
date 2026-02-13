@@ -402,30 +402,30 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
 
   return (
     <div className="space-y-6 pb-16">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl surface-panel px-6 py-4 shadow-soft">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex-1 space-y-2">
-          <label className="text-xs uppercase tracking-wide text-muted" htmlFor="article-title">
+          <label className="text-[11px] uppercase tracking-[0.2em] text-muted/70" htmlFor="article-title">
             Article title
           </label>
           <input
             id="article-title"
             type="text"
             {...register("title")}
-            className="w-full rounded-lg border border-border/40 bg-background px-4 py-3 text-xl font-semibold text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+            className="w-full bg-transparent px-0 py-0 text-3xl font-semibold text-foreground outline-none placeholder:text-muted/60 focus-visible:ring-0"
             placeholder="Name this article"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
-          <span className={`rounded-full px-3 py-1 ${isPublished ? "bg-emerald-500/15 text-emerald-100" : "bg-yellow-500/15 text-yellow-100"}`}>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-muted/70">
+          <span className={`rounded-full px-2.5 py-1 ${isPublished ? "bg-emerald-500/15 text-emerald-100" : "bg-yellow-500/15 text-yellow-100"}`}>
             {isPublished ? "Published" : "Draft"}
           </span>
-          <span className="rounded-full bg-surface-muted px-3 py-1">{wordCount} words</span>
+          <span className="rounded-full bg-surface/40 px-2.5 py-1">{wordCount} words</span>
           {liveUrl ? (
             <Link
               href={liveUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-full border border-border/60 px-3 py-1 text-foreground transition hover:border-accent hover:text-accent"
+              className="rounded-full px-2.5 py-1 text-foreground/80 transition hover:text-foreground"
             >
               View live ↗
             </Link>
@@ -435,10 +435,10 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
 
       {statusMessage ? (
         <div
-          className={`rounded-lg border px-4 py-3 text-sm ${
+          className={`rounded-lg px-4 py-3 text-xs ${
             statusMessage.tone === "success"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
-              : "border-red-500/40 bg-red-500/10 text-red-100"
+              ? "bg-emerald-500/10 text-emerald-100"
+              : "bg-red-500/10 text-red-100"
           }`}
         >
           {statusMessage.text}
@@ -448,19 +448,19 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
       <form
         id="article-editor-form"
         onSubmit={onSubmit}
-        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]"
+        className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]"
       >
         <div className="space-y-6">
-          <div className="space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
+          <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-foreground">Article body</h2>
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70">Article body</h2>
               <label
                 htmlFor="article-markdown-upload"
                 onDragOver={onMarkdownDragOver}
                 onDragLeave={onMarkdownDragLeave}
                 onDrop={onMarkdownDrop}
-                className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs transition hover:border-accent ${
-                  isMarkdownDragging ? "border-accent bg-accent/10 text-accent" : "bg-background/60 text-muted"
+                className={`inline-flex cursor-pointer items-center gap-2 rounded-full bg-surface/50 px-3 py-1 text-[11px] transition hover:text-foreground ${
+                  isMarkdownDragging ? "bg-accent/15 text-accent" : "text-muted/70"
                 }`}
               >
                 <input id="article-markdown-upload" type="file" accept="text/markdown,.md" onChange={onMarkdownInputChange} className="hidden" />
@@ -478,23 +478,23 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
             {errors.content_md ? <p className="text-xs text-destructive">{errors.content_md.message}</p> : null}
           </div>
 
-          <div className="space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
+          <div className="space-y-4 rounded-2xl bg-surface/30 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-foreground">Image gallery helper</h2>
-              <p className="text-xs text-muted">Uploads are resized to 1200px wide WebP files automatically.</p>
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70">Image gallery helper</h2>
+              <p className="text-[11px] text-muted/70">Uploads are resized to 1200px wide WebP files automatically.</p>
             </div>
             <label
               htmlFor="article-gallery-upload"
               onDragOver={onGalleryDragOver}
               onDragLeave={onGalleryDragLeave}
               onDrop={onGalleryDrop}
-              className={`block cursor-pointer rounded-lg border border-dashed border-border/60 bg-background/60 px-4 py-6 text-center text-sm transition hover:border-accent ${
-                isGalleryDragging ? "border-accent bg-accent/10 text-accent" : "text-muted"
+              className={`block cursor-pointer rounded-xl bg-surface/40 px-4 py-6 text-center text-sm transition hover:text-foreground ${
+                isGalleryDragging ? "bg-accent/10 text-accent" : "text-muted/70"
               }`}
             >
               <input id="article-gallery-upload" type="file" accept="image/*" multiple onChange={onGalleryInputChange} className="hidden" />
               <span className="block font-semibold text-foreground">Drag & drop supporting images</span>
-              <span className="text-xs text-muted">or click to upload (max 10MB each)</span>
+              <span className="text-xs text-muted/70">or click to upload (max 10MB each)</span>
               {galleryUploading ? <span className="mt-2 block text-xs text-muted">Uploading…</span> : null}
             </label>
             {galleryError ? <p className="text-xs text-destructive">{galleryError}</p> : null}
@@ -504,7 +504,7 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
                 {galleryImages.map((image) => {
                   const markdown = `![${image.title || "Article image"}](${image.url})`;
                   return (
-                    <div key={image.url} className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/60 p-3">
+                    <div key={image.url} className="flex items-center gap-3 rounded-xl bg-surface/40 p-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={image.url} alt={image.title} className="h-16 w-16 rounded object-cover" />
                       <div className="flex-1 text-xs text-muted">
@@ -513,7 +513,7 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
                         <button
                           type="button"
                           onClick={() => copyMarkdown(markdown)}
-                          className="mt-2 inline-flex items-center rounded border border-border/60 px-2 py-1 text-[11px] font-semibold text-foreground transition hover:border-border/40 hover:bg-surface"
+                          className="mt-2 inline-flex items-center rounded-full bg-surface/60 px-2.5 py-1 text-[11px] font-semibold text-foreground transition hover:bg-surface-muted/70"
                         >
                           Copy markdown
                         </button>
@@ -527,19 +527,19 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
         </div>
 
         <div className="space-y-4 lg:sticky lg:top-6">
-          <div className="space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
+          <div className="space-y-4 rounded-2xl bg-surface/30 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Publish settings</h2>
-              <span className="text-xs text-muted">{lastUpdatedLabel}</span>
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70">Publish settings</h2>
+              <span className="text-[11px] text-muted/70">{lastUpdatedLabel}</span>
             </div>
             <Controller
               name="is_published"
               control={control}
               render={({ field }) => (
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-background/60 px-3 py-3">
+                <label className="flex items-center justify-between gap-4 rounded-xl bg-surface/40 px-3 py-3">
                   <div>
                     <span className="block text-sm font-semibold text-foreground">Published</span>
-                    <span className="text-xs text-muted">Toggle to make the article visible on the site.</span>
+                    <span className="text-xs text-muted/70">Toggle to make the article visible on the site.</span>
                   </div>
                   <input
                     type="checkbox"
@@ -554,29 +554,29 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
               <span className={`rounded-full px-3 py-1 font-semibold uppercase ${isPublished ? "bg-emerald-500/10 text-emerald-200" : "bg-yellow-500/10 text-yellow-200"}`}>
                 {isPublished ? "Published" : "Draft"}
               </span>
-              <span className="rounded-full bg-surface-muted px-3 py-1 text-muted">{wordCount} words</span>
+              <span className="rounded-full bg-surface/50 px-3 py-1 text-muted">{wordCount} words</span>
             </div>
           </div>
 
-          <div className="space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
-            <h2 className="text-lg font-semibold text-foreground">Cover image</h2>
+          <div className="space-y-4 rounded-2xl bg-surface/30 p-4">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70">Cover image</h2>
             <label
               htmlFor="article-cover-upload"
               onDragOver={onCoverDragOver}
               onDragLeave={onCoverDragLeave}
               onDrop={onCoverDrop}
-              className={`block cursor-pointer rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-center text-sm transition hover:border-accent ${
-                isCoverDragging ? "border-accent bg-accent/10 text-accent" : "text-muted"
+              className={`block cursor-pointer rounded-xl bg-surface/40 px-4 py-6 text-center text-sm transition hover:text-foreground ${
+                isCoverDragging ? "bg-accent/10 text-accent" : "text-muted/70"
               }`}
             >
               <input id="article-cover-upload" type="file" accept="image/*" onChange={onCoverInputChange} className="hidden" />
               <span className="block font-semibold text-foreground">Drop a cover image</span>
-              <span className="text-xs text-muted">Automatically resized &amp; compressed to WebP.</span>
+              <span className="text-xs text-muted/70">Automatically resized &amp; compressed to WebP.</span>
               {coverUploading ? <span className="mt-2 block text-xs text-muted">Uploading…</span> : null}
             </label>
             {coverError ? <p className="text-xs text-destructive">{coverError}</p> : null}
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="article-cover-image">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70" htmlFor="article-cover-image">
                 Cover image URL
               </label>
               <input
@@ -584,21 +584,21 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
                 type="url"
                 {...register("cover_image")}
                 placeholder="https://media.example.com/article-cover.webp"
-                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full rounded-lg bg-surface/40 px-3 py-2 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-accent/20"
               />
             </div>
             {coverValue ? (
-              <div className="overflow-hidden rounded-xl border border-border/60 bg-background/60">
+              <div className="overflow-hidden rounded-xl bg-surface/40">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={coverValue} alt="Article cover" className="h-40 w-full object-cover" />
               </div>
             ) : null}
           </div>
 
-          <div className="space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
-            <h2 className="text-lg font-semibold text-foreground">Meta details</h2>
+          <div className="space-y-4 rounded-2xl bg-surface/30 p-4">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70">Meta details</h2>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground" htmlFor="article-slug">
+              <label className="text-xs font-semibold text-foreground" htmlFor="article-slug">
                 Slug
               </label>
               <input
@@ -606,20 +606,20 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
                 type="text"
                 placeholder={titleValue ? slugify(titleValue) : "my-awesome-guide"}
                 {...register("slug")}
-                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full rounded-lg bg-surface/40 px-3 py-2 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-accent/20"
               />
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted/70">
                 Used for URLs and filenames. Leave empty to auto-generate from the title.
               </p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground" htmlFor="article-author">
+              <label className="text-xs font-semibold text-foreground" htmlFor="article-author">
                 Author
               </label>
               <select
                 id="article-author"
                 {...register("author_id")}
-                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full rounded-lg bg-surface/40 px-3 py-2 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-accent/20"
               >
                 <option value="">Unassigned</option>
                 {authors.map((authorOption) => (
@@ -630,26 +630,26 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground" htmlFor="article-meta-description">
+              <label className="text-xs font-semibold text-foreground" htmlFor="article-meta-description">
                 Meta description
               </label>
               <textarea
                 id="article-meta-description"
                 rows={4}
                 {...register("meta_description")}
-                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                className="w-full rounded-lg bg-surface/40 px-3 py-2 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-accent/20"
               />
-              <p className="text-xs text-muted">Keep under 160 characters for best SEO results.</p>
+              <p className="text-xs text-muted/70">Keep under 160 characters for best SEO results.</p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-2xl surface-panel p-4 shadow-soft">
+          <div className="flex flex-col gap-3 rounded-2xl bg-surface/30 p-4">
             {article ? (
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={isPending}
-                className="w-full rounded-lg border border-destructive/60 px-3 py-2 text-sm font-semibold text-destructive transition hover:border-destructive hover:bg-destructive/10 disabled:opacity-60"
+                className="w-full rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive transition hover:bg-destructive/20 disabled:opacity-60"
               >
                 Delete article
               </button>
@@ -658,17 +658,17 @@ export function ArticleEditorForm({ article, authors }: ArticleEditorFormProps) 
               type="submit"
               form="article-editor-form"
               disabled={isPending}
-              className="w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-foreground px-4 py-3 text-xs font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? "Saving..." : "Save article"}
             </button>
           </div>
         </div>
 
-        <div className="lg:col-span-2 space-y-4 rounded-2xl surface-panel p-6 shadow-soft">
+        <div className="lg:col-span-2 space-y-4 rounded-2xl bg-surface/30 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-foreground">Article media</h2>
-            <p className="text-xs text-muted">Store screenshots and embeds for this article. Uses the article slug as the folder.</p>
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted/70">Article media</h2>
+            <p className="text-[11px] text-muted/70">Store screenshots and embeds for this article. Uses the article slug as the folder.</p>
           </div>
           {slugValue ? (
             <ScopedMediaManager basePath={`articles/${slugValue}`} label="Article media library" />

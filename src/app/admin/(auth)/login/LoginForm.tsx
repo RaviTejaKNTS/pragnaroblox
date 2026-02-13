@@ -31,8 +31,10 @@ const Alert = ({ tone, children }: AlertProps) => (
 );
 
 function buildRedirect(origin: string, redirectTo: string) {
+  const safePath = redirectTo.startsWith("/admin") ? redirectTo : "/admin";
   try {
-    const url = new URL(redirectTo || "/admin", origin);
+    const url = new URL("/auth/callback", origin);
+    url.searchParams.set("redirect", safePath || "/admin");
     return url.toString();
   } catch {
     return `${origin}/admin`;

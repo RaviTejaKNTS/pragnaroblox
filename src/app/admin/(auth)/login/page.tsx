@@ -9,6 +9,7 @@ function sanitizeRedirect(input?: string | string[] | null): string {
   if (!input.startsWith("/")) return "/admin";
   if (input.startsWith("//")) return "/admin";
   if (input.startsWith("/admin/login")) return "/admin";
+  if (!input.startsWith("/admin")) return "/admin";
   return input;
 }
 
@@ -19,13 +20,15 @@ export const metadata = {
 export default async function AdminLoginPage({
   searchParams
 }: {
-  searchParams: { redirect?: string | string[]; error?: string | string[] };
+  searchParams:
+    | { redirect?: string | string[]; error?: string | string[] }
+    | Promise<{ redirect?: string | string[]; error?: string | string[] }>;
 }) {
   const { supabaseUrl, supabaseKey, cookieOptions } = getSupabaseConfig();
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerComponentClient({
-    cookies: () => cookieStore
+    cookies: () => cookieStore as unknown as ReturnType<typeof cookies>
   }, {
     supabaseUrl,
     supabaseKey,
@@ -36,17 +39,20 @@ export default async function AdminLoginPage({
     data: { session }
   } = await supabase.auth.getSession();
 
-  const sanitizedRedirect = sanitizeRedirect(searchParams.redirect ?? null);
-  const errorParam = Array.isArray(searchParams.error) ? searchParams.error[0] : searchParams.error;
+  const resolvedSearchParams = await searchParams;
+  const sanitizedRedirect = sanitizeRedirect(resolvedSearchParams?.redirect ?? null);
+  const errorParam = Array.isArray(resolvedSearchParams?.error)
+    ? resolvedSearchParams?.error[0]
+    : resolvedSearchParams?.error;
 
   if (session) {
     const { data: adminRecord } = await supabase
-      .from("admin_users")
+      .from("app_users")
       .select("role")
       .eq("user_id", session.user.id)
       .maybeSingle();
 
-    if (adminRecord) {
+    if (adminRecord?.role === "admin") {
       redirect(sanitizedRedirect || "/admin");
     }
 

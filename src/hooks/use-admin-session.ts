@@ -4,7 +4,7 @@ import { supabaseBrowser } from "@/lib/supabase-browser";
 
 type AdminSessionState = {
   session: Session | null;
-  role: string | null | undefined;
+  role: "admin" | null | undefined;
   loading: boolean;
 };
 
@@ -17,7 +17,7 @@ export function useAdminSession(): AdminSessionState {
   useEffect(() => {
     let active = true;
 
-    type AdminRow = { role: string | null };
+    type AdminRow = { role: "admin" | "user" | null };
 
     const loadSession = async () => {
       setLoading(true);
@@ -29,13 +29,13 @@ export function useAdminSession(): AdminSessionState {
 
         if (nextSession) {
           const { data: adminRow } = await supabase
-            .from("admin_users")
+            .from("app_users")
             .select("role")
             .eq("user_id", nextSession.user.id)
             .maybeSingle<AdminRow>();
 
           if (active) {
-            setRole(adminRow?.role ?? null);
+            setRole(adminRow?.role === "admin" ? "admin" : null);
           }
         } else {
           setRole(null);
@@ -55,13 +55,13 @@ export function useAdminSession(): AdminSessionState {
       }
       try {
         const { data } = await supabase
-          .from("admin_users")
+          .from("app_users")
           .select("role")
           .eq("user_id", nextSession.user.id)
           .maybeSingle<AdminRow>();
 
         if (active) {
-          setRole(data?.role ?? null);
+          setRole(data?.role === "admin" ? "admin" : null);
         }
       } catch {
         if (active) setRole(null);

@@ -12,10 +12,11 @@ export const revalidate = 0;
 export default async function AdminGamesPage({
   searchParams
 }: {
-  searchParams?: { page?: string };
+  searchParams?: { page?: string } | Promise<{ page?: string }>;
 }) {
   const supabase = supabaseAdmin();
-  const page = Number(searchParams?.page ?? "1");
+  const resolvedSearchParams = await searchParams;
+  const page = Number(resolvedSearchParams?.page ?? "1");
   const [gameResult, authors] = await Promise.all([
     fetchAdminGames(supabase, { page }),
     fetchAdminAuthors(supabase)

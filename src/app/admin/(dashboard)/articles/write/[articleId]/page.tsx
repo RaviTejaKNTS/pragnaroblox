@@ -5,7 +5,7 @@ import { fetchAdminAuthors } from "@/lib/admin/games";
 import { ArticleEditorForm } from "@/components/admin/articles/ArticleEditorForm";
 
 interface ArticleEditorPageProps {
-  params: { articleId: string };
+  params: { articleId: string } | Promise<{ articleId: string }>;
 }
 
 export const dynamic = "force-dynamic";
@@ -17,9 +17,14 @@ export const metadata = {
 
 export default async function ArticleEditorPage({ params }: ArticleEditorPageProps) {
   const supabase = supabaseAdmin();
-  const articleId = params.articleId;
+  const resolvedParams = await params;
+  const articleId = resolvedParams?.articleId;
 
   const authors = await fetchAdminAuthors(supabase);
+
+  if (!articleId) {
+    notFound();
+  }
 
   if (articleId === "new") {
     return <ArticleEditorForm article={null} authors={authors} />;
